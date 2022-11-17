@@ -1,5 +1,7 @@
 import { request } from "@/utils/request";
-import { notFoundError, requestError } from "@/errors";
+import { AddressEnrollment } from "@/protocols";
+import { getAddress } from "@/utils/cep-service";
+import { notFoundError } from "@/errors";
 import addressRepository, { CreateAddressParams } from "@/repositories/address-repository";
 import enrollmentRepository, { CreateEnrollmentParams } from "@/repositories/enrollment-repository";
 import { exclude } from "@/utils/prisma-utils";
@@ -12,12 +14,18 @@ async function getAddressFromCEP(cep: string) {
     throw notFoundError();
   }
 
-  const { logradouro, complemento, bairro, localidade, uf }: {
-    logradouro: string; 
-    complemento: string; 
-    bairro: string; 
-    localidade: string; 
-    uf: string
+  const {
+    logradouro,
+    complemento,
+    bairro,
+    localidade,
+    uf,
+  }: {
+    logradouro: string;
+    complemento: string;
+    bairro: string;
+    localidade: string;
+    uf: string;
   } = result;
 
   return {
@@ -59,8 +67,8 @@ async function createOrUpdateEnrollmentWithAddress(params: CreateOrUpdateEnrollm
 
   const cepCheck = await request.get(`https://viacep.com.br/ws/${address.cep}/json/`);
 
-  if(!cepCheck.data.logradouro) {
-    throw requestError(400, "BAD_REQUEST");
+  if (!cepCheck.data.logradouro) {
+    throw notFoundError();
   }
 
   const newEnrollment = await enrollmentRepository.upsert(params.userId, enrollment, exclude(enrollment, "userId"));
@@ -82,7 +90,7 @@ export type CreateOrUpdateEnrollmentWithAddress = CreateEnrollmentParams & {
 const enrollmentsService = {
   getOneWithAddressByUserId,
   createOrUpdateEnrollmentWithAddress,
-  getAddressFromCEP
+  getAddressFromCEP,
 };
 
 export default enrollmentsService;
