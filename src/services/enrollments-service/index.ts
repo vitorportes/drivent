@@ -1,4 +1,3 @@
-import { request } from "@/utils/request";
 import { AddressEnrollment } from "@/protocols";
 import { getAddress } from "@/utils/cep-service";
 import { notFoundError } from "@/errors";
@@ -7,34 +6,22 @@ import enrollmentRepository, { CreateEnrollmentParams } from "@/repositories/enr
 import { exclude } from "@/utils/prisma-utils";
 import { Address, Enrollment } from "@prisma/client";
 
-async function getAddressFromCEP(cep: string) {
-  const result = (await request.get(`https://viacep.com.br/ws/${cep}/json/`)).data;
+async function getAddressFromCEP(cep: string): Promise<AddressEnrollment> {
+  const result = await getAddress(cep);
 
-  if (!result) {
-    throw notFoundError();
-  }
+  if (!result) throw notFoundError();
 
-  const {
-    logradouro,
-    complemento,
+  const { bairro, localidade, uf, complemento, logradouro } = result;
+
+  const address = {
     bairro,
-    localidade,
-    uf,
-  }: {
-    logradouro: string;
-    complemento: string;
-    bairro: string;
-    localidade: string;
-    uf: string;
-  } = result;
-
-  return {
-    logradouro: logradouro,
-    complemento: complemento,
-    bairro: bairro,
     cidade: localidade,
-    uf: uf,
+    uf,
+    complemento,
+    logradouro,
   };
+
+  return address;
 }
 
 async function getOneWithAddressByUserId(userId: number): Promise<GetOneWithAddressByUserIdResult> {
@@ -63,13 +50,12 @@ type GetAddressResult = Omit<Address, "createdAt" | "updatedAt" | "enrollmentId"
 
 async function createOrUpdateEnrollmentWithAddress(params: CreateOrUpdateEnrollmentWithAddress) {
   const enrollment = exclude(params, "address");
+
   const address = getAddressForUpsert(params.address);
 
-  const cepCheck = await request.get(`https://viacep.com.br/ws/${address.cep}/json/`);
+  const result = await getAddressFromCEP(address.cep);
 
-  if (!cepCheck.data.logradouro) {
-    throw notFoundError();
-  }
+  if (result.error) throw notFoundError();
 
   const newEnrollment = await enrollmentRepository.upsert(params.userId, enrollment, exclude(enrollment, "userId"));
 

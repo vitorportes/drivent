@@ -1,30 +1,43 @@
-import { notFoundError } from "@/errors";
-import { TicketType, Ticket } from "@prisma/client";
+import { badRequestError, notFoundError } from "@/errors";
+import { createTicketResult, getTicketResult } from "@/protocols";
 import enrollmentRepository from "@/repositories/enrollment-repository";
-import { createTicket, findManyTickets, findTicketByEnrollment } from "@/repositories/tickets-repository";
+import ticketsRepository from "@/repositories/tickets-repository";
+import userRepository from "@/repositories/user-repository";
+import { exclude } from "@/utils/prisma-utils";
+import { TicketType } from "@prisma/client";
 
-export async function findTicketTypes(): Promise<TicketType[]> {
-  return await findManyTickets();
+async function getTicketTypes(): Promise<TicketType[]> {
+  return await ticketsRepository.findTicketTypes();
 }
 
-export async function findTicketByUserId(userId: number): Promise<Ticket> {
+async function getTicket(userId: number): Promise<getTicketResult> {
+  const user = userRepository.findById(userId);
+
+  if (!user) throw notFoundError();
+
+  const ticket = await ticketsRepository.findTicketByUserId(userId);
+
+  if (!ticket) throw notFoundError();
+
+  return {
+    ...exclude(ticket, "Enrollment"),
+  };
+}
+
+async function createTicket(userId: number, ticketTypeId: number): Promise<createTicketResult> {
+  const user = userRepository.findById(userId);
+
+  if (!ticketTypeId) throw badRequestError();
+
+  if (!user) throw notFoundError();
+
   const enrollment = await enrollmentRepository.findWithAddressByUserId(userId);
 
   if (!enrollment) throw notFoundError();
 
-  const ticket = await findTicketByEnrollment(enrollment.id);
-
-  if (!ticket) throw notFoundError();
-
-  return ticket;
+  return await ticketsRepository.createTicket(ticketTypeId, enrollment.id);
 }
 
-export async function createNewTicket(ticketTypeId: number, userId: number): Promise<Ticket> {
-  const enrollment = await enrollmentRepository.findWithAddressByUserId(userId);
+const ticketsService = { getTicketTypes, getTicket, createTicket };
 
-  if (enrollment === null) throw notFoundError();
-
-  const newTicket = await createTicket(ticketTypeId, enrollment.id);
-
-  return newTicket;
-}
+export default ticketsService;

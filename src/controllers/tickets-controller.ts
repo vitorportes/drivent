@@ -1,25 +1,28 @@
 import { AuthenticatedRequest } from "@/middlewares";
-import { createNewTicket, findTicketByUserId, findTicketTypes } from "@/services/tickets-service";
+import ticketsService from "@/services/tickets-service";
 import { Response } from "express";
 import httpStatus from "http-status";
 
-export async function findTicketsTypes(req: AuthenticatedRequest, res: Response) {
+export async function getTicket(req: AuthenticatedRequest, res: Response) {
+  const { userId } = req;
+
   try {
-    const ticketTypes = await findTicketTypes();
-    return res.status(httpStatus.OK).send(ticketTypes);
+    const ticket = await ticketsService.getTicket(userId);
+    return res.status(httpStatus.OK).send(ticket);
   } catch (error) {
-    return res.sendStatus(httpStatus.NO_CONTENT);
+    if (error.name === "NotFoundError") return res.sendStatus(httpStatus.NOT_FOUND);
+    return res.sendStatus(httpStatus.INTERNAL_SERVER_ERROR);
   }
 }
 
-export async function findTicket(req: AuthenticatedRequest, res: Response) {
-  const { userId } = req;
+export async function getTicketTypes(req: AuthenticatedRequest, res: Response) {
   try {
-    const ticket = await findTicketByUserId(userId);
+    const ticketTypes = await ticketsService.getTicketTypes();
 
-    return res.status(httpStatus.OK).send(ticket);
+    res.status(httpStatus.OK).send(ticketTypes);
+    return;
   } catch (error) {
-    return res.sendStatus(httpStatus.NOT_FOUND);
+    return res.sendStatus(httpStatus.INTERNAL_SERVER_ERROR);
   }
 }
 
@@ -27,13 +30,15 @@ export async function createTicket(req: AuthenticatedRequest, res: Response) {
   const { userId } = req;
   const { ticketTypeId } = req.body;
 
-  if (!ticketTypeId) return res.sendStatus(httpStatus.BAD_REQUEST);
-
   try {
-    const newTicket = await createNewTicket(ticketTypeId, userId);
+    const ticket = await ticketsService.createTicket(userId, ticketTypeId);
 
-    return res.status(httpStatus.CREATED).send(newTicket);
+    return res.status(httpStatus.CREATED).send(ticket);
   } catch (error) {
-    return res.sendStatus(httpStatus.NOT_FOUND);
+    if (error.name === "NotFoundError") return res.sendStatus(httpStatus.NOT_FOUND);
+
+    if (error.name === "BadRequestError") return res.sendStatus(httpStatus.BAD_REQUEST);
+
+    return res.sendStatus(httpStatus.INTERNAL_SERVER_ERROR);
   }
 }
